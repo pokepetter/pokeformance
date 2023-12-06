@@ -50,6 +50,9 @@ def measure_performance_line_by_line(lines, min_limit=.01, rounding=4, skip_fast
             'durations' : durations,
             'num_times_run' : num_times_run,
             }
+        # for key, value in globals().items():
+        #     print(key, value)
+        #     vars[key] = value
         if file_path:
             vars['__file__'] = file_path
 
@@ -58,7 +61,7 @@ def measure_performance_line_by_line(lines, min_limit=.01, rounding=4, skip_fast
         print('-- exec done')
 
     except Exception:
-        print('\n'.join([f'{i:>3} {l}' for i, l in enumerate(code.split('\n'))]))
+        # print('\n'.join([f'{i:>3} {l}' for i, l in enumerate(code.split('\n'))]))
         print(traceback.format_exc())
 
 
@@ -171,15 +174,23 @@ def convert_argv(prefix='--'):
     return kwargs
 
 
-if __name__ == '__main__':
-
+def main():
     if len(sys.argv) > 1:
+        if '--help' in sys.argv:
+            import inspect
+            signature = inspect.signature(measure_performance_line_by_line)
+            defaults = {param.name: param.default for param in signature.parameters.values() if param.default is not inspect.Parameter.empty}
+            help_text = ' '.join([f'{key}={value}' for key, value in defaults.items()])
+            print(help_text)
+            return
+
         target_file = Path.cwd() / sys.argv[1]
         print('profiling script:', target_file)
         kwargs = convert_argv()
 
+
         with open(target_file, 'r') as f:
-            lines = f.readlines()[:-1]
+            lines = f.readlines()
 
             print('input args:', 'file_path=', target_file, kwargs.items())
             result = measure_performance_line_by_line(lines, file_path=target_file, **kwargs)
@@ -188,9 +199,13 @@ if __name__ == '__main__':
     else:
         from textwrap import dedent
         test_code = dedent('''
-            a = 5
-            b = [i*i for i in range(1000)]
-            '''[1:]).split('\n')
+        a = 5
+        b = [i*i for i in range(1000)]
+        '''[1:]).split('\n')
         # print(test_code)
 
         print(measure_performance_line_by_line(test_code, min_limit=0))
+
+
+if __name__ == '__main__':
+    main()
