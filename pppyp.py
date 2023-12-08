@@ -7,7 +7,7 @@ from textwrap import dedent
 import subprocess
 
 
-def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, show_line_numbers=True, sort_by_time=False, max_width=None):
+def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, show_line_numbers=True, sort_by_time=False, max_width=999, skip_lines_containing=''):
     print('profiling script:', file)
     if isinstance(file, str):
         file = Path(file)
@@ -25,6 +25,8 @@ def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, 
     code += f'skip_fast_lines = {skip_fast_lines}; '
     code += f'show_line_numbers = {show_line_numbers}; '
     code += f'sort_by_time = {sort_by_time}; '
+    code += f'max_width = {max_width}; '
+    code += f'skip_lines_containing = "{skip_lines_containing}"; '
 
     single_line_statement = None
     prev_line_continues = None
@@ -32,6 +34,9 @@ def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, 
     previous_line_valid = False
 
     for i, line in enumerate(lines):
+        if skip_lines_containing and skip_lines_containing in line:
+            continue
+
         line = remove_comments_from_line(line)
         current_line_valid = is_valid_single_line_statement(line)
         new_line = ''
@@ -42,7 +47,7 @@ def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, 
         # add timing code before and after line
         if (previous_line_valid or prev_line == '\n') and current_line_valid:   # consecutive valid lines
             indentation = len(line) - len(line.lstrip())
-            new_line = f'{" "*indentation}t=perf_counter(); {line.strip()}; dur=perf_counter()-t; durations[{i}]+=dur; num_times_run[{i}]+=1;'
+            new_line = f'{" "*indentation}__t=perf_counter(); {line.strip()}; dur=perf_counter()-__t; durations[{i}]+=dur; num_times_run[{i}]+=1;'
         elif current_line_valid:
             new_line = line.rstrip()    # valid line
         else:
@@ -64,7 +69,7 @@ def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, 
     code += "    duration_text = f'{round(duration,rounding)}' if duration >= min_limit else ''\n"
     code += "    num_times_run_text = n if n > 0 else ''\n"
     code += "    line_number = i if show_line_numbers else ''\n"
-    code += "    print(f'{duration_text:<7}|{num_times_run_text:>3} |{line_number:>4}|{text.rstrip()}')\n"
+    code += "    print(f'{duration_text:<7}|{num_times_run_text:>3} |{line_number:>4}|{text.rstrip()[:max_width]}')\n"
 
     code += "total_time = sum([line[1] for line in results])\n"
     code += "print('total time:', total_time)\n"
@@ -72,7 +77,7 @@ def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, 
     path = Path(file.parent / f'{file.stem}_pppyp_profiling_temp.py')
     with path.open('w') as f:
         f.write(code)
-    subprocess.Popen(['python', path])
+    subprocess.Popen([sys.executable, path])
 
     # subprocess.Popen(['python', '-c', code])
 
@@ -115,15 +120,18 @@ def convert_argv(prefix='--'):
             print('ggggggggggggg', name, value)
             if value == 'True':
                 value = True
-            if value == 'False':
+            elif value == 'False':
                 value = False
-            try:
-                value = int(value)
-            except ValueError:
+            elif value.startswith('\''):
+                value = f'"{value}"'
+            else:
                 try:
-                    value = float(value)
+                    value = int(value)
                 except ValueError:
-                    pass
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        pass
 
             print('set arg:', name, value)
             kwargs[name.lstrip(prefix)] = value
@@ -134,9 +142,16 @@ def main():
     if len(sys.argv) > 1:
         if '--help' in sys.argv:
             import inspect
-            signature = inspect.signature(measure_performance_line_by_line)
+            signature = inspect.signature(measure_performance)
             defaults = {param.name: param.default for param in signature.parameters.values() if param.default is not inspect.Parameter.empty}
             help_text = ' '.join([f'{key}={value}' for key, value in defaults.items()])
+            help_text = ''
+            for key, value in defaults.items():
+                if isinstance(value, str):
+                    value = f'\'{value}\''
+                help_text += f'{key}={value} '
+
+
             print(help_text)
             return
 
