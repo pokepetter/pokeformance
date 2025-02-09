@@ -7,13 +7,16 @@ from textwrap import dedent
 import subprocess
 
 
-def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, show_line_numbers=True, sort_by_time=False, max_width=999, skip_lines_containing=''):
+def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, show_line_numbers=True, sort_by_time=False, max_width=999, skip_lines_containing='', imports_only=False, suppress_print=True):
     print('profiling script:', file)
     if isinstance(file, str):
         file = Path(file)
 
     with file.open('r') as f:
         lines = f.readlines()
+        if imports_only:
+            lines = [l.lstrip() for l in lines if l.lstrip().startswith('import ') or l.lstrip().startswith('from ')]
+            print('lines:', lines)
     # add timing code
     num_lines = len(lines)
     code = f'from time import perf_counter; '
@@ -27,6 +30,16 @@ def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, 
     code += f'sort_by_time = {sort_by_time}; '
     code += f'max_width = {max_width}; '
     code += f'skip_lines_containing = "{skip_lines_containing}"; '
+    code += f'original_print = print; '
+
+    if suppress_print:
+        code += dedent('''\
+
+            import builtins
+            def _eat_print(*args, **kwargs):
+                return
+            builtins.print = _eat_print
+            ''')
 
     single_line_statement = None
     prev_line_continues = None
@@ -69,16 +82,16 @@ def measure_performance(file, min_limit=.01, rounding=4, skip_fast_lines=False, 
     code += "    duration_text = f'{round(duration,rounding)}' if duration >= min_limit else ''\n"
     code += "    num_times_run_text = n if n > 0 else ''\n"
     code += "    line_number = i if show_line_numbers else ''\n"
-    code += "    print(f'{duration_text:<7}|{num_times_run_text:>3} |{line_number:>4}|{text.rstrip()[:max_width]}')\n"
+    code += "    original_print(f'{duration_text:<7}|{num_times_run_text:>3} |{line_number:>4}|{text.rstrip()[:max_width]}')\n"
 
     code += "total_time = sum([line[1] for line in results])\n"
-    code += "print('total time:', total_time)\n"
+    code += "original_print('total time:', total_time)\n"
 
-    path = Path(file.parent / f'{file.stem}_pppyp_profiling_temp.py')
+    path = Path(file.parent / f'{file.stem}_pokeformance_profiling_temp.py')
     with path.open('w') as f:
         f.write(code)
     subprocess.Popen([sys.executable, path])
-
+    # path.unlink()
     # subprocess.Popen(['python', '-c', code])
 
 
@@ -117,7 +130,6 @@ def convert_argv(prefix='--'):
     for arg in sys.argv:
         if '=' in arg:
             name, value = arg.split('=')
-            print('ggggggggggggg', name, value)
             if value == 'True':
                 value = True
             elif value == 'False':

@@ -4,15 +4,15 @@ from setuptools import setup
 #     long_desc = f.read()
 
 setup(
-    name='pppyp',
+    name='pokeformance',
     description='Profile each line of a python file',
     # long_description=long_desc,
     # long_description_content_type="text/markdown",
     version='1',
-    py_modules=['pppyp'],
+    py_modules=['pokeformance'],
     entry_points='''
         [console_scripts]
-        pppyp=pppyp:pppyp
+        pokeformance=pokeformance:pokeformance
     ''',
     # url='https://github.com/pokepetter/ursina',
     author='Petter Amland',
